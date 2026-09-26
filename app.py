@@ -16,12 +16,15 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch Binance 24hr data for Overview Dashboard (Updated with error visibility)
+# Fetch Binance 24hr data for Overview Dashboard (Fixed with Headers & Fallback)
 @st.cache_data(ttl=60)
 def get_market_overview():
     url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    }
     try:
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, headers=headers, timeout=15)
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) > 0:
@@ -30,12 +33,21 @@ def get_market_overview():
                 for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
                 return df
-            else:
-                st.error("Binance returned empty or invalid JSON format.")
-        else:
-            st.error(f"Binance API Error: Status code {response.status_code}")
+        
+        # Fallback to Spot API if Futures API is blocked or returns error
+        fallback_url = "https://api.binance.com/api/v3/ticker/24hr"
+        res2 = requests.get(fallback_url, headers=headers, timeout=15)
+        if res2.status_code == 200:
+            data = res2.json()
+            if isinstance(data, list) and len(data) > 0:
+                df = pd.DataFrame(data)
+                df = df[df['symbol'].str.endswith('USDT')].copy()
+                for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                return df
+                
     except Exception as e:
-        st.error(f"Exception connecting to Binance: {e}")
+        st.error(f"Connection Exception: {e}")
     return pd.DataFrame()
 
 # Sidebar Navigation
