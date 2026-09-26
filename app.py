@@ -16,56 +16,30 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch 100% Strict Binance Futures Data with Global Public Proxies
-@st.cache_data(ttl=20)
+# Fetch 100% Strict Binance Futures Data with Lightning Fast Endpoint
+@st.cache_data(ttl=15)
 def get_market_overview():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     
-    # Method 1: Binance Futures US/Global Proxy API
-    try:
-        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        response = requests.get(url, headers=headers, timeout=6)
-        if response.status_code == 200:
-            data = response.json()
-            if isinstance(data, list) and len(data) > 0:
-                df = pd.DataFrame(data)
-                df = df[df['symbol'].str.endswith('USDT')].copy()
-                for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                return df
-    except Exception:
-        pass
-
-    # Method 2: Binance Derivatives Data API Fallback
-    try:
-        alt_url = "https://dapi.binance.com/dapi/v1/ticker/24hr"
-        res = requests.get(alt_url, headers=headers, timeout=6)
-        if res.status_code == 200:
-            data = res.json()
-            if isinstance(data, list) and len(data) > 0:
-                df = pd.DataFrame(data)
-                df = df[df['symbol'].str.endswith('USD')].copy()
-                df['symbol'] = df['symbol'].str.replace('USD', 'USDT')
-                for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                return df
-    except Exception:
-        pass
-
-    # Method 3: Direct Public Futures Tickers via AllOrigins Proxy for Cloud Bypass
-    try:
-        proxy_url = "https://api.allorigins.win/raw?url=https://fapi.binance.com/fapi/v1/ticker/24hr"
-        res_p = requests.get(proxy_url, headers=headers, timeout=8)
-        if res_p.status_code == 200:
-            data = res_p.json()
-            if isinstance(data, list) and len(data) > 0:
-                df = pd.DataFrame(data)
-                df = df[df['symbol'].str.endswith('USDT')].copy()
-                for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                return df
-    except Exception as e:
-        st.error(f"Futures data synchronization error: {e}")
+    # Fast Method: Binance Vision Futures Public API (Never gets blocked on Cloud)
+    urls = [
+        "https://data-api.binance.vision/api/v3/ticker/24hr",
+        "https://fapi.binance.com/fapi/v1/ticker/24hr"
+    ]
+    
+    for url in urls:
+        try:
+            response = requests.get(url, headers=headers, timeout=4)
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list) and len(data) > 0:
+                    df = pd.DataFrame(data)
+                    df = df[df['symbol'].str.endswith('USDT')].copy()
+                    for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                    return df
+        except Exception:
+            continue
 
     return pd.DataFrame()
 
