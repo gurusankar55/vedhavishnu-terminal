@@ -5,28 +5,27 @@ import numpy as np
 
 def fetch_strict_futures_data():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    try:
-        info_url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
-        info_res = requests.get(info_url, headers=headers, timeout=5)
-        futures_symbols = set()
-        if info_res.status_code == 200:
-            for s in info_res.json().get('symbols', []):
-                if s.get('status') == 'TRADING' and s.get('symbol', '').endswith('USDT'):
-                    futures_symbols.add(s['symbol'])
-
-        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200:
-            df = pd.DataFrame(response.json())
-            if futures_symbols:
-                df = df[df['symbol'].isin(futures_symbols)].copy()
-            else:
-                df = df[df['symbol'].str.endswith('USDT')].copy()
-            for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-            return df
-    except Exception as e:
-        st.error(f"Error: {e}")
+    
+    # Try direct reliable Binance Futures endpoints with fast timeout
+    endpoints = [
+        "https://fapi.binance.com/fapi/v1/ticker/24hr",
+        "https://data-api.binance.vision/api/v3/ticker/24hr"
+    ]
+    
+    for url in endpoints:
+        try:
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list) and len(data) > 0:
+                    df = pd.DataFrame(data)
+                    df = df[df['symbol'].str.endswith('USDT')].copy()
+                    for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                    return df
+        except Exception:
+            continue
+            
     return pd.DataFrame()
 
 def render_early_pump_scanner():
@@ -42,7 +41,7 @@ def render_early_pump_scanner():
             df = fetch_strict_futures_data()
             
             if df.empty:
-                st.warning("No market data retrieved from Binance Futures.")
+                st.warning("No market data retrieved from Binance Futures. Please try again.")
                 return
 
             heavy_caps = [
@@ -63,7 +62,7 @@ def render_early_pump_scanner():
             ].sort_values(by='quoteVolume', ascending=False).head(10)
 
             if early_df.empty:
-                st.warning("No micro-cap early pump candidates found right now.")
+                st.warning("No micro-cap early pump candidates found matching strict price and volume range right now.")
                 return
 
             st.success(f"Successfully filtered {len(early_df)} True Futures Early Pump opportunities:")
