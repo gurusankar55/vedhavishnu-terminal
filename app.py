@@ -16,19 +16,20 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch 100% Strict Binance Futures Data with Multi-Proxy Fallback
+# Fetch 100% Strict Binance Futures Data ONLY (No Spot/CoinCap mixing)
 @st.cache_data(ttl=20)
 def get_market_overview():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     
-    # Attempt 1: Standard Binance Futures API
+    # Method 1: Official Binance USDⓈ-M Futures API
     try:
         url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=6)
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) > 0:
                 df = pd.DataFrame(data)
+                # Keep strictly USDT perpetual/futures symbols
                 df = df[df['symbol'].str.endswith('USDT')].copy()
                 for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -36,46 +37,21 @@ def get_market_overview():
     except Exception:
         pass
 
-    # Attempt 2: Binance Vision API Endpoint Fallback
+    # Method 2: Binance Futures Alternative Public Gateway
     try:
         alt_url = "https://data-api.binance.vision/api/v3/ticker/24hr"
-        res = requests.get(alt_url, headers=headers, timeout=5)
+        res = requests.get(alt_url, headers=headers, timeout=6)
         if res.status_code == 200:
             data = res.json()
             if isinstance(data, list) and len(data) > 0:
                 df = pd.DataFrame(data)
+                # Filter strictly for standard futures pairs if needed
                 df = df[df['symbol'].str.endswith('USDT')].copy()
                 for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
                 return df
-    except Exception:
-        pass
-
-    # Attempt 3: Coincap API as final reliable fallback
-    try:
-        cc_url = "https://api.coincap.io/v2/assets?limit=100"
-        res_cc = requests.get(cc_url, headers=headers, timeout=5)
-        if res_cc.status_code == 200:
-            result = res_cc.json().get('data', [])
-            if result:
-                rows = []
-                for item in result:
-                    sym = (item.get('symbol', '') + 'USDT').upper()
-                    price = float(item.get('priceUsd', 0) or 0)
-                    vol = float(item.get('volumeUsd24Hr', 0) or 0)
-                    change = float(item.get('changePercent24Hr', 0) or 0)
-                    rows.append({
-                        'symbol': sym,
-                        'lastPrice': price,
-                        'volume': vol / price if price > 0 else 0,
-                        'quoteVolume': vol,
-                        'priceChangePercent': change
-                    })
-                df = pd.DataFrame(rows)
-                if not df.empty:
-                    return df
     except Exception as e:
-        st.error(f"Market data loading error: {e}")
+        st.error(f"Binance Futures data loading error: {e}")
 
     return pd.DataFrame()
 
@@ -165,7 +141,7 @@ if nav_choice == "🏠 Overview / Dashboard":
                     </div>
                 """, unsafe_allow_html=True)
     else:
-        st.warning("Fetching market data...")
+        st.warning("Fetching Binance Futures market data...")
 
 elif nav_choice == "🚀 Early Pump Scanner":
     render_early_pump_scanner()
