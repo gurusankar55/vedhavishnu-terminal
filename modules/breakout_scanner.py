@@ -3,41 +3,41 @@ import pandas as pd
 import requests
 
 def render_breakout_scanner():
-    st.subheader("⚡ Breakout & Whale Accumulation Scanner (WEEX Futures)")
-    st.info("Filtering WEEX Futures for Whale Opportunities...")
+    st.subheader("⚡ Breakout & Whale Accumulation Scanner (Binance Futures)")
+    st.info("Filtering Binance Futures for Low-Cap Whale Opportunities...")
     
-    search_query = st.text_input("🔍 Search Any WEEX Coin (e.g., BTCUSDT)", "").upper().strip()
+    search_query = st.text_input("🔍 Search Any Futures Coin (e.g., BTCUSDT)", "").upper().strip()
     
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    
     try:
-        symbols_url = "https://api-contract.weex.com/capi/v3/market/apiTradingSymbols"
-        res = requests.get(symbols_url, headers=headers, timeout=10)
-        if res.status_code == 200:
-            symbols = res.json()
-            rows = []
-            for sym in symbols:
-                if sym.endswith('USDT'):
-                    if search_query and search_query not in sym:
-                        continue
-                    price_url = f"https://api-contract.weex.com/capi/v3/market/symbolPrice?symbol={sym}"
-                    p_res = requests.get(price_url, headers=headers, timeout=2)
-                    price = 0.0
-                    if p_res.status_code == 200:
-                        price = float(p_res.json().get('price', 0) or 0)
-                    
-                    rows.append({
-                        'symbol': sym,
-                        'lastPrice': price,
-                        'quoteVolume': 15000000.0,
-                        'priceChangePercent': 4.2
-                    })
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            df = pd.DataFrame(data)
+            df = df[df['symbol'].str.endswith('USDT')].copy()
             
-            df = pd.DataFrame(rows)
+            df['lastPrice'] = pd.to_numeric(df['lastPrice'], errors='coerce')
+            df['quoteVolume'] = pd.to_numeric(df['quoteVolume'], errors='coerce')
+            df['priceChangePercent'] = pd.to_numeric(df['priceChangePercent'], errors='coerce')
+            
+            if search_query:
+                df = df[df['symbol'].str.contains(search_query)]
+                if df.empty:
+                    st.warning(f"No futures coin found matching '{search_query}'.")
+                    return
+            else:
+                excluded = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT']
+                df = df[~df['symbol'].isin(excluded)]
+                df = df[(df['quoteVolume'] > 1_000_000) & (df['quoteVolume'] < 40_000_000)]
+                df = df.sort_values(by='quoteVolume', ascending=False).head(5)
+            
             if df.empty:
-                st.warning("No WEEX futures coins matched the criteria.")
+                st.warning("No low-cap futures coins matched the criteria right now.")
                 return
 
-            for idx, row in df.head(5).iterrows():
+            for idx, row in df.iterrows():
                 symbol = row['symbol']
                 price = row['lastPrice']
                 vol = row['quoteVolume']
@@ -50,11 +50,14 @@ def render_breakout_scanner():
                 tp2 = resistance * 1.05
                 
                 with st.container():
-                    st.markdown(f"### `💎 {symbol}` (24h Change: `+{change:.2f}%`)")
-                    st.write(f"**Live Price:** `${price:.4f}` | **RSI (14):** `56.5` | **24h Vol:** `${vol:,.0f}`")
-                    st.markdown("🟢 **Whale Footprint: WEEX Accumulation Phase**")
-                    st.markdown(f"🛡️ **Major Support Zone:** `${support:.4f}` | **Major Resistance Zone:** `${resistance:.4f}`")
-                    st.markdown(f"🎯 **Safe Stop-Loss (SL):** `${sl:.4f}` | **TP1:** `${tp1:.4f}` | **TP2:** `${tp2:.4f}`")
-                    st.markdown("---")
+                    st.markdown(f"""
+                        <div class="metric-card">
+                            <h3 style="margin:0; color: #00F0FF;">💎 {symbol} (Change: {change:+.2f}%)</h3>
+                            <p style="margin: 8px 0; font-size: 14px;"><b>Live Price:</b> ${price:,.4f} | <b>24h Vol:</b> ${vol:,.0f}</p>
+                            <p style="margin: 4px 0; color: #00FF88;">🟢 <b>Whale Footprint: Low-Cap Accumulation Phase</b></p>
+                            <p style="margin: 4px 0;">🛡️ <b>Support:</b> ${support:,.4f} | <b>Resistance:</b> ${resistance:,.4f}</p>
+                            <p style="margin: 4px 0;">🎯 <b>Stop-Loss:</b> ${sl:,.4f} | <b>TP1:</b> ${tp1:,.4f} | <b>TP2:</b> ${tp2:,.4f}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Error: {e}")

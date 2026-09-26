@@ -15,39 +15,22 @@ st.set_page_config(
 
 render_ui()
 
-# Fetch Weex Futures Data via Symbols & Kline fallback for 24h stats
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def get_market_overview():
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+    headers = {'User-Agent': 'Mozilla/5.0'}
     try:
-        # Step 1: Get all API Trading Symbols from WEEX Futures
-        symbols_url = "https://api-contract.weex.com/capi/v3/market/apiTradingSymbols"
-        res = requests.get(symbols_url, headers=headers, timeout=10)
-        if res.status_code == 200:
-            symbols = res.json()
-            if isinstance(symbols, list) and len(symbols) > 0:
-                rows = []
-                for sym in symbols:
-                    if sym.endswith('USDT'):
-                        # Fetch recent price/kline or ticker info per symbol
-                        price_url = f"https://api-contract.weex.com/capi/v3/market/symbolPrice?symbol={sym}"
-                        p_res = requests.get(price_url, headers=headers, timeout=3)
-                        price = 0.0
-                        if p_res.status_code == 200:
-                            p_data = p_res.json()
-                            price = float(p_data.get('price', 0) or 0)
-                        
-                        rows.append({
-                            'symbol': sym,
-                            'lastPrice': price,
-                            'volume': 1000000.0, # Default estimate if volume endpoint varies
-                            'quoteVolume': 5000000.0,
-                            'priceChangePercent': 2.5 # Estimated baseline for filtering
-                        })
-                if rows:
-                    return pd.DataFrame(rows)
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, list):
+                df = pd.DataFrame(data)
+                df = df[df['symbol'].str.endswith('USDT')].copy()
+                for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                return df
     except Exception as e:
-        st.error(f"Weex Connection Exception: {e}")
+        st.error(f"Error: {e}")
     return pd.DataFrame()
 
 st.sidebar.markdown("<h2 style='color: #00F0FF; font-size: 20px;'>⚡ Navigation</h2>", unsafe_allow_html=True)
@@ -88,7 +71,7 @@ else:
 st.markdown("""
     <div style="text-align: center; margin-bottom: 20px; margin-top: 10px;">
         <h3 style="color: #00F0FF; letter-spacing: 2px; margin: 0;">⚡ VEDHAVISHNU</h3>
-        <p style="color: #a7f3d0; font-size: 12px; margin: 2px 0 0 0;">Professional WEEX Futures Quant Terminal</p>
+        <p style="color: #a7f3d0; font-size: 12px; margin: 2px 0 0 0;">Professional Binance Futures Quant Terminal</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -97,27 +80,51 @@ if nav_choice == "🏠 Overview / Dashboard":
     if not df.empty:
         tab1, tab2, tab3 = st.tabs(["🔥 Top Gainers", "📉 Top Losers", "💎 Top Volume"])
         with tab1:
-            st.markdown("#### Top 10 WEEX Futures Symbols")
-            gainers = df.head(10)
-            for _, row in gainers.iterrows():
+            st.markdown("#### Top 10 Gainers (24h)")
+            for _, row in df.sort_values(by='priceChangePercent', ascending=False).head(10).iterrows():
                 st.markdown(f"""
-                    <div class="metric-card" style="display: flex; justify-content: space-between; align-items: center; padding: 8px;">
-                        <span style="color: #00F0FF; font-weight: bold;">{row['symbol']}</span>
-                        <span style="color: #a7f3d0;">${row['lastPrice']:,.4f}</span>
-                        <span style="color: #00FF88; font-weight: bold;">Active Futures</span>
+                    <div class="metric-card" style="display: flex; justify-content: space-between; align-items: center; padding: 10px;">
+                        <span style="color: #00F0FF; font-weight: bold; font-size: 16px;">{row['symbol']}</span>
+                        <span style="color: #e0f2f1; font-size: 15px;">${row['lastPrice']:,.4f}</span>
+                        <span style="color: #00FF88; font-weight: bold; font-size: 15px;">{row['priceChangePercent']:+.2f}%</span>
                     </div>
                 """, unsafe_allow_html=True)
         with tab2:
-            st.markdown("#### Market Watch")
-            st.info("WEEX Futures live market feed connected successfully.")
+            st.markdown("#### Top 10 Losers (24h)")
+            for _, row in df.sort_values(by='priceChangePercent', ascending=True).head(10).iterrows():
+                st.markdown(f"""
+                    <div class="metric-card" style="display: flex; justify-content: space-between; align-items: center; padding: 10px;">
+                        <span style="color: #00F0FF; font-weight: bold; font-size: 16px;">{row['symbol']}</span>
+                        <span style="color: #e0f2f1; font-size: 15px;">${row['lastPrice']:,.4f}</span>
+                        <span style="color: #FF4D4D; font-weight: bold; font-size: 15px;">{row['priceChangePercent']:+.2f}%</span>
+                    </div>
+                """, unsafe_allow_html=True)
         with tab3:
-            st.markdown("#### Volume Statistics")
-            st.info("Tracking active liquidity pools on WEEX.")
+            st.markdown("#### Top 10 Volume Leaders (24h)")
+            for _, row in df.sort_values(by='quoteVolume', ascending=False).head(10).iterrows():
+                st.markdown(f"""
+                    <div class="metric-card" style="display: flex; justify-content: space-between; align-items: center; padding: 10px;">
+                        <span style="color: #00F0FF; font-weight: bold; font-size: 16px;">{row['symbol']}</span>
+                        <span style="color: #e0f2f1; font-size: 15px;">${row['lastPrice']:,.4f}</span>
+                        <span style="color: #00F0FF; font-size: 15px;">Vol: ${row['quoteVolume']:,.0f}</span>
+                    </div>
+                """, unsafe_allow_html=True)
     else:
-        st.warning("Fetching WEEX market data...")
+        st.warning("Fetching market overview data...")
 
 elif nav_choice == "🚀 Early Pump Scanner":
     render_early_pump_scanner()
 
 elif nav_choice == "⚡ Breakout & Whale Scanner":
     render_breakout_scanner()
+    st.markdown("---")
+    st.subheader("📲 Advanced Telegram & Volume Spike Trigger")
+    if st.button("Run Advanced Whale & Telegram Filter"):
+        market_df = get_market_overview()
+        if not market_df.empty:
+            with st.spinner("Analyzing Multi-Timeframe Volume Spikes & Sending Alerts..."):
+                active_signals = apply_advanced_filters(market_df, tg_token, chat_id)
+                if active_signals:
+                    st.success(f"Successfully triggered alerts for: {active_signals}")
+                else:
+                    st.info("Scan completed. No major volume spikes matched the strict criteria right now.")
