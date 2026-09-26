@@ -16,42 +16,24 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch 100% Strict Binance Futures Perpetual Data ONLY
-@st.cache_data(ttl=15)
+# Fetch Lightning Fast Strict Binance Futures Data
+@st.cache_data(ttl=20)
 def get_market_overview():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
     try:
-        # Step 1: Get Exchange Info to know exact futures symbols and contract types
-        info_url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
-        info_res = requests.get(info_url, headers=headers, timeout=5)
-        futures_symbols = set()
-        if info_res.status_code == 200:
-            symbols_data = info_res.json().get('symbols', [])
-            for s in symbols_data:
-                # Keep strictly perpetual USDT contracts
-                if s.get('contractType') == 'PERPETUAL' and s.get('quoteAsset') == 'USDT':
-                    futures_symbols.add(s.get('symbol'))
-
-        # Step 2: Get 24hr Ticker data
         url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        response = requests.get(url, headers=headers, timeout=6)
+        response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) > 0:
                 df = pd.DataFrame(data)
-                
-                # If exchangeInfo worked, filter strictly by futures symbols list
-                if futures_symbols:
-                    df = df[df['symbol'].isin(futures_symbols)].copy()
-                else:
-                    df = df[df['symbol'].str.endswith('USDT')].copy()
-                
+                # Keep strictly USDT futures contracts (Binance Futures perpetual symbols always end with USDT)
+                df = df[df['symbol'].str.endswith('USDT')].copy()
                 for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
                 return df
     except Exception as e:
-        st.error(f"Binance Futures error: {e}")
+        st.error(f"Binance Futures connection error: {e}")
 
     return pd.DataFrame()
 
