@@ -16,20 +16,26 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch Binance 24hr data for Overview Dashboard
+# Fetch Binance 24hr data for Overview Dashboard (Updated with error visibility)
 @st.cache_data(ttl=60)
 def get_market_overview():
     url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=15)
         if response.status_code == 200:
-            df = pd.DataFrame(response.json())
-            df = df[df['symbol'].str.endswith('USDT')].copy()
-            for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-            return df
+            data = response.json()
+            if isinstance(data, list) and len(data) > 0:
+                df = pd.DataFrame(data)
+                df = df[df['symbol'].str.endswith('USDT')].copy()
+                for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                return df
+            else:
+                st.error("Binance returned empty or invalid JSON format.")
+        else:
+            st.error(f"Binance API Error: Status code {response.status_code}")
     except Exception as e:
-        st.error(f"Error connecting to Binance: {e}")
+        st.error(f"Exception connecting to Binance: {e}")
     return pd.DataFrame()
 
 # Sidebar Navigation
