@@ -16,41 +16,24 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch Market data with lightning-fast timeout and reliable endpoints
-@st.cache_data(ttl=30)
+# Fetch 100% Strict Binance Futures Data
+@st.cache_data(ttl=20)
 def get_market_overview():
+    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
-    # Attempt 1: Binance Futures Endpoint
     try:
-        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) > 0:
                 df = pd.DataFrame(data)
-                df = df[df['symbol'].str.endswith('USDT')].copy()
-                for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                return df
-    except Exception:
-        pass
-
-    # Attempt 2: Alternative Binance Public Endpoint Fallback
-    try:
-        alt_url = "https://data-api.binance.vision/api/v3/ticker/24hr"
-        res = requests.get(alt_url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            if isinstance(data, list) and len(data) > 0:
-                df = pd.DataFrame(data)
+                # Ensure only true USDT futures contracts
                 df = df[df['symbol'].str.endswith('USDT')].copy()
                 for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
                 return df
     except Exception as e:
-        st.error(f"Market data loading error: {e}")
-
+        st.error(f"Binance Futures API Connection Error: {e}")
     return pd.DataFrame()
 
 # Sidebar Navigation
@@ -107,7 +90,7 @@ if nav_choice == "🏠 Overview / Dashboard":
         tab1, tab2, tab3 = st.tabs(["🔥 Top Gainers", "📉 Top Losers", "💎 Top Volume"])
 
         with tab1:
-            st.markdown("#### Top 10 Gainers (24h)")
+            st.markdown("#### Top 10 Binance Futures Gainers (24h)")
             for _, row in df.sort_values(by='priceChangePercent', ascending=False).head(10).iterrows():
                 st.markdown(f"""
                     <div class="metric-card" style="display: flex; justify-content: space-between; align-items: center; padding: 10px;">
@@ -118,7 +101,7 @@ if nav_choice == "🏠 Overview / Dashboard":
                 """, unsafe_allow_html=True)
 
         with tab2:
-            st.markdown("#### Top 10 Losers (24h)")
+            st.markdown("#### Top 10 Binance Futures Losers (24h)")
             for _, row in df.sort_values(by='priceChangePercent', ascending=True).head(10).iterrows():
                 st.markdown(f"""
                     <div class="metric-card" style="display: flex; justify-content: space-between; align-items: center; padding: 10px;">
@@ -129,7 +112,7 @@ if nav_choice == "🏠 Overview / Dashboard":
                 """, unsafe_allow_html=True)
 
         with tab3:
-            st.markdown("#### Top 10 Volume Leaders (24h)")
+            st.markdown("#### Top 10 Binance Futures Volume Leaders (24h)")
             for _, row in df.sort_values(by='quoteVolume', ascending=False).head(10).iterrows():
                 st.markdown(f"""
                     <div class="metric-card" style="display: flex; justify-content: space-between; align-items: center; padding: 10px;">
@@ -139,7 +122,7 @@ if nav_choice == "🏠 Overview / Dashboard":
                     </div>
                 """, unsafe_allow_html=True)
     else:
-        st.warning("Fetching market overview data...")
+        st.warning("Fetching Binance Futures market data...")
 
 elif nav_choice == "🚀 Early Pump Scanner":
     render_early_pump_scanner()
