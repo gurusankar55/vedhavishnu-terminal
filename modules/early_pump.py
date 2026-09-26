@@ -4,18 +4,68 @@ import pandas as pd
 import numpy as np
 
 def fetch_binance_futures_data():
-    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    
+    # Method 1: Binance Spot API Fallback for Cloud
     try:
-        response = requests.get(url, timeout=10)
+        url = "https://api.binance.com/api/v3/ticker/24hr"
+        response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
-            df = pd.DataFrame(response.json())
-            df = df[df['symbol'].str.endswith('USDT')].copy()
-            numeric_cols = ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']
-            for col in numeric_cols:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-            return df
+            data = response.json()
+            if isinstance(data, list) and len(data) > 0:
+                df = pd.DataFrame(data)
+                df = df[df['symbol'].str.endswith('USDT')].copy()
+                numeric_cols = ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']
+                for col in numeric_cols:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                return df
+    except Exception:
+        pass
+
+    # Method 2: Bybit Ticker API Fallback
+    try:
+        bybit_url = "https://api.bybit.com/v5/market/tickers?category=linear"
+        res2 = requests.get(bybit_url, headers=headers, timeout=10)
+        if res2.status_code == 200:
+            result = res2.json().get('result', {}).get('list', [])
+            if result:
+                rows = []
+                for item in result:
+                    sym = item.get('symbol', '')
+                    if sym.endswith('USDT'):
+                        price = float(item.get('lastPrice', 0) or 0)
+                        vol = float(item.get('volume24h', 0) or 0)
+                        turnover = float(item.get('turnover24h', 0) or 0)
+                        change = float(item.get('price24hPcnt', 0) or 0) * 100
+                        rows.append({
+                            'symbol': sym,
+                            'lastPrice': price,
+                            'volume': vol,
+                            'quoteVolume': turnover if turnover > 0 else vol * price,
+                            'priceChangePercent': change
+                        })
+                df = pd.DataFrame(rows)
+                if not df.empty:
+                    return df
+    except Exception:
+        pass
+
+    # Method 3: MEXC Ticker API Fallback
+    try:
+        mexc_url = "https://api.mexc.com/api/v3/ticker/24hr"
+        res3 = requests.get(mexc_url, headers=headers, timeout=10)
+        if res3.status_code == 200:
+            data = res3.json()
+            if isinstance(data, list) and len(data) > 0:
+                df = pd.DataFrame(data)
+                df = df[df['symbol'].str.endswith('USDT')].copy()
+                numeric_cols = ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']
+                for col in numeric_cols:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                return df
     except Exception as e:
-        st.error(f"Error fetching data from Binance: {e}")
+        st.error(f"Error fetching data from exchanges: {e}")
+
     return pd.DataFrame()
 
 def render_early_pump_scanner():
@@ -44,9 +94,6 @@ def render_early_pump_scanner():
             ]
 
             # Strict True Micro/Low-Cap Logic:
-            # 1. Price between $0.01 and $5.0 (Eliminates high-price heavy coins)
-            # 2. Price change between 1.0% and 7.5% (Early momentum stage)
-            # 3. Quote Volume between $300K and $10M (Strictly small cap volume footprint)
             early_df = df[
                 (df['lastPrice'] >= 0.01) & 
                 (df['lastPrice'] <= 5.0) &
