@@ -16,14 +16,14 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch Market data with multiple robust fallbacks (Fixed CoinCap URL)
+# Fetch Market data using robust Binance Spot API (Bypassing cloud restrictions)
 @st.cache_data(ttl=60)
 def get_market_overview():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     
-    # Method 1: Binance Futures API
+    # Method 1: Binance Spot API (Highly reliable on Cloud servers)
     try:
-        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        url = "https://api.binance.com/api/v3/ticker/24hr"
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
             data = response.json()
@@ -36,9 +36,9 @@ def get_market_overview():
     except Exception:
         pass
 
-    # Method 2: Binance Spot API Fallback
+    # Method 2: Binance Futures API Fallback
     try:
-        fallback_url = "https://api.binance.com/api/v3/ticker/24hr"
+        fallback_url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
         res2 = requests.get(fallback_url, headers=headers, timeout=10)
         if res2.status_code == 200:
             data = res2.json()
@@ -47,31 +47,6 @@ def get_market_overview():
                 df = df[df['symbol'].str.endswith('USDT')].copy()
                 for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
-                return df
-    except Exception:
-        pass
-
-    # Method 3: CoinCap Public API (Fixed URL)
-    try:
-        coincap_url = "https://api.coincap.io/v2/assets?limit=100"
-        res3 = requests.get(coincap_url, headers=headers, timeout=10)
-        if res3.status_code == 200:
-            result = res3.json().get('data', [])
-            if result:
-                rows = []
-                for item in result:
-                    sym = (item.get('symbol', '') + 'USDT').upper()
-                    price = float(item.get('priceUsd', 0) or 0)
-                    vol = float(item.get('volumeUsd24Hr', 0) or 0)
-                    change = float(item.get('changePercent24Hr', 0) or 0)
-                    rows.append({
-                        'symbol': sym,
-                        'lastPrice': price,
-                        'volume': vol / price if price > 0 else 0,
-                        'quoteVolume': vol,
-                        'priceChangePercent': change
-                    })
-                df = pd.DataFrame(rows)
                 return df
     except Exception as e:
         st.error(f"All data sources failed: {e}")
