@@ -32,7 +32,7 @@ def render_ui():
             font-family: 'Inter', sans-serif;
         }
         p, span, label, div, b, strong {
-            color: #e0f2f1;
+            color: #e0f2f1 !important;
         }
         .stButton>button {
             background-color: #00F0FF;
@@ -56,7 +56,7 @@ def render_ui():
 
     st.markdown("""
         <div class="header-card">
-            <h2 style="margin:0; font-size: 24px;">⚡ PRO QUANT TERMINAL</h2>
-            <p style="color: #a7f3d0; margin: 5px 0 0 0; font-size: 14px;">Modular Institutional Engine for Binance Futures</p>
+            <h2 style="margin:0; font-size: 24px;">⚡ VEDHAVISHNU QUANT TERMINAL</h2>
+            <p style="color: #a7f3d0; margin: 5px 0 0 0; font-size: 14px;">Professional Institutional Engine for WEEX Futures</p>
         </div>
     """, unsafe_allow_html=True)
