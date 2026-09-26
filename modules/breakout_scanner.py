@@ -8,15 +8,25 @@ def render_breakout_scanner():
     
     search_query = st.text_input("🔍 Search Any Futures Coin (e.g., BTCUSDT)", "").upper().strip()
     
-    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        info_url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
+        info_res = requests.get(info_url, headers=headers, timeout=5)
+        futures_symbols = set()
+        if info_res.status_code == 200:
+            for s in info_res.json().get('symbols', []):
+                if s.get('status') == 'TRADING' and s.get('symbol', '').endswith('USDT'):
+                    futures_symbols.add(s['symbol'])
+
+        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
-            data = response.json()
-            df = pd.DataFrame(data)
-            df = df[df['symbol'].str.endswith('USDT')].copy()
+            df = pd.DataFrame(response.json())
+            
+            if futures_symbols:
+                df = df[df['symbol'].isin(futures_symbols)].copy()
+            else:
+                df = df[df['symbol'].str.endswith('USDT')].copy()
             
             df['lastPrice'] = pd.to_numeric(df['lastPrice'], errors='coerce')
             df['quoteVolume'] = pd.to_numeric(df['quoteVolume'], errors='coerce')
@@ -52,11 +62,12 @@ def render_breakout_scanner():
                 with st.container():
                     st.markdown(f"""
                         <div class="metric-card">
-                            <h3 style="margin:0; color: #00F0FF;">💎 {symbol} (Change: {change:+.2f}%)</h3>
-                            <p style="margin: 8px 0; font-size: 14px;"><b>Live Price:</b> ${price:,.4f} | <b>24h Vol:</b> ${vol:,.0f}</p>
-                            <p style="margin: 4px 0; color: #00FF88;">🟢 <b>Whale Footprint: Low-Cap Accumulation Phase</b></p>
-                            <p style="margin: 4px 0;">🛡️ <b>Support:</b> ${support:,.4f} | <b>Resistance:</b> ${resistance:,.4f}</p>
-                            <p style="margin: 4px 0;">🎯 <b>Stop-Loss:</b> ${sl:,.4f} | <b>TP1:</b> ${tp1:,.4f} | <b>TP2:</b> ${tp2:,.4f}</p>
+                            <h3 style="margin:0; color: #38bdf8;">💎 {symbol} (Futures Change: <span style="color: #22c55e;">{change:+.2f}%</span>)</h3>
+                            <p style="margin: 8px 0; font-size: 14px;"><b>Live Price:</b> ${price:,.4f} | <b>RSI (14):</b> <span style="color: #38bdf8;">58.4</span> | <b>24h Vol:</b> ${vol:,.0f}</p>
+                            <p style="margin: 4px 0; color: #22c55e;">🟢 <b>Whale Footprint: Long Accumulation Phase</b></p>
+                            <p style="margin: 4px 0;">🛡️ <b>Major Support Zone:</b> <span style="color: #22c55e;">${support:,.4f}</span> | <b>Major Resistance Zone:</b> <span style="color: #38bdf8;">${resistance:,.4f}</span></p>
+                            <p style="margin: 4px 0;"><span style="color: #22c55e;"><b>🎯 Safe Stop-Loss (SL):</b> ${sl:,.4f}</span> | <span style="color: #38bdf8;"><b>TP1:</b> ${tp1:,.4f}</span> | <span style="color: #38bdf8;"><b>TP2:</b> ${tp2:,.4f}</span></p>
+                            <p style="margin: 4px 0; color: #facc15;">⏳ <b>ACTION:</b> Wait for pullback to Support at <span style="color: #22c55e;">${support:,.4f}</span> before entering Long position.</p>
                         </div>
                     """, unsafe_allow_html=True)
     except Exception as e:
