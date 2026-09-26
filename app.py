@@ -16,15 +16,15 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch Binance 24hr data for Overview Dashboard (Fixed with Headers & Fallback)
+# Fetch Market data with multiple robust fallbacks (Bypassing 451 Geo-block)
 @st.cache_data(ttl=60)
 def get_market_overview():
-    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-    }
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    
+    # Method 1: Binance Futures API
     try:
-        response = requests.get(url, headers=headers, timeout=15)
+        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) > 0:
@@ -33,10 +33,13 @@ def get_market_overview():
                 for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
                 return df
-        
-        # Fallback to Spot API if Futures API is blocked or returns error
+    except Exception:
+        pass
+
+    # Method 2: Binance Spot API Fallback
+    try:
         fallback_url = "https://api.binance.com/api/v3/ticker/24hr"
-        res2 = requests.get(fallback_url, headers=headers, timeout=15)
+        res2 = requests.get(fallback_url, headers=headers, timeout=10)
         if res2.status_code == 200:
             data = res2.json()
             if isinstance(data, list) and len(data) > 0:
@@ -45,9 +48,34 @@ def get_market_overview():
                 for col in ['lastPrice', 'volume', 'quoteVolume', 'priceChangePercent']:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
                 return df
-                
+    except Exception:
+        pass
+
+    # Method 3: CoinCap Public API (Never blocked by cloud servers)
+    try:
+        coincap_url = "https://api.coincap.io/v2/assets?limit=100"
+        res3 = requests.get(coincap_url, headers=headers, timeout=10)
+        if res3.status_code == 200:
+            result = res3.json().get('data', [])
+            if result:
+                rows = []
+                for item in result:
+                    sym = (item.get('symbol', '') + 'USDT').upper()
+                    price = float(item.get('priceUsd', 0) or 0)
+                    vol = float(item.get('volumeUsd24Hr', 0) or 0)
+                    change = float(item.get('changePercent24Hr', 0) or 0)
+                    rows.append({
+                        'symbol': sym,
+                        'lastPrice': price,
+                        'volume': vol / price if price > 0 else 0,
+                        'quoteVolume': vol,
+                        'priceChangePercent': change
+                    })
+                df = pd.DataFrame(rows)
+                return df
     except Exception as e:
-        st.error(f"Connection Exception: {e}")
+        st.error(f"All data sources failed: {e}")
+
     return pd.DataFrame()
 
 # Sidebar Navigation
@@ -72,7 +100,6 @@ if 'chat_id' not in st.session_state:
 if 'lock_credentials' not in st.session_state:
     st.session_state['lock_credentials'] = False
 
-# லாக் செய்யும் செக்-பாக்ஸ்
 lock_state = st.sidebar.checkbox("🔒 Lock Telegram Credentials", value=st.session_state['lock_credentials'])
 st.session_state['lock_credentials'] = lock_state
 
@@ -148,7 +175,6 @@ elif nav_choice == "🚀 Early Pump Scanner":
 elif nav_choice == "⚡ Breakout & Whale Scanner":
     render_breakout_scanner()
     
-    # Advanced Telegram & Volume Spike Trigger Integration (Manual Option)
     st.markdown("---")
     st.subheader("📲 Advanced Telegram & Volume Spike Trigger")
     
@@ -165,7 +191,6 @@ elif nav_choice == "⚡ Breakout & Whale Scanner":
         else:
             st.warning("Market data not available for advanced filtering.")
 
-    # ஆட்டோமேட்டிக் அட்வான்ஸ்டு வேல்ஸ் மற்றும் டெலிகிராம் ஸ்கேனர் & ஸ்டேட்டஸ்
     st.markdown("---")
     st.subheader("🤖 Automated Telegram & Whale Scanner (Live)")
     
