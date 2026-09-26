@@ -16,15 +16,15 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch Market data using robust Binance Spot API (Bypassing cloud restrictions)
+# Fetch Market data using Multi-Exchange Fallback (Binance -> Bybit -> MEXC)
 @st.cache_data(ttl=60)
 def get_market_overview():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     
-    # Method 1: Binance Spot API (Highly reliable on Cloud servers)
+    # Method 1: Binance Spot API
     try:
         url = "https://api.binance.com/api/v3/ticker/24hr"
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=8)
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) > 0:
@@ -36,12 +36,40 @@ def get_market_overview():
     except Exception:
         pass
 
-    # Method 2: Binance Futures API Fallback
+    # Method 2: Bybit Linear Ticker API (Extremely reliable for cloud servers)
     try:
-        fallback_url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        res2 = requests.get(fallback_url, headers=headers, timeout=10)
+        bybit_url = "https://api.bybit.com/v5/market/tickers?category=linear"
+        res2 = requests.get(bybit_url, headers=headers, timeout=8)
         if res2.status_code == 200:
-            data = res2.json()
+            result = res2.json().get('result', {}).get('list', [])
+            if result:
+                rows = []
+                for item in result:
+                    sym = item.get('symbol', '')
+                    if sym.endswith('USDT'):
+                        price = float(item.get('lastPrice', 0) or 0)
+                        vol = float(item.get('volume24h', 0) or 0)
+                        turnover = float(item.get('turnover24h', 0) or 0)
+                        change = float(item.get('price24hPcnt', 0) or 0) * 100
+                        rows.append({
+                            'symbol': sym,
+                            'lastPrice': price,
+                            'volume': vol,
+                            'quoteVolume': turnover if turnover > 0 else vol * price,
+                            'priceChangePercent': change
+                        })
+                df = pd.DataFrame(rows)
+                if not df.empty:
+                    return df
+    except Exception:
+        pass
+
+    # Method 3: MEXC Ticker API Fallback
+    try:
+        mexc_url = "https://api.mexc.com/api/v3/ticker/24hr"
+        res3 = requests.get(mexc_url, headers=headers, timeout=8)
+        if res3.status_code == 200:
+            data = res3.json()
             if isinstance(data, list) and len(data) > 0:
                 df = pd.DataFrame(data)
                 df = df[df['symbol'].str.endswith('USDT')].copy()
@@ -49,7 +77,7 @@ def get_market_overview():
                     df[col] = pd.to_numeric(df[col], errors='coerce')
                 return df
     except Exception as e:
-        st.error(f"All data sources failed: {e}")
+        st.error(f"All exchange data sources failed: {e}")
 
     return pd.DataFrame()
 
