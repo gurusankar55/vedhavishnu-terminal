@@ -16,7 +16,7 @@ st.set_page_config(
 # Render Global UI Styling
 render_ui()
 
-# Fetch Market data with multiple robust fallbacks (Bypassing 451 Geo-block)
+# Fetch Market data with multiple robust fallbacks (Fixed CoinCap URL)
 @st.cache_data(ttl=60)
 def get_market_overview():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
@@ -51,7 +51,7 @@ def get_market_overview():
     except Exception:
         pass
 
-    # Method 3: CoinCap Public API (Never blocked by cloud servers)
+    # Method 3: CoinCap Public API (Fixed URL)
     try:
         coincap_url = "https://api.coincap.io/v2/assets?limit=100"
         res3 = requests.get(coincap_url, headers=headers, timeout=10)
